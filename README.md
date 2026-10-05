@@ -33,7 +33,7 @@ Writes to `~/.config/omarchy/themes/<name>` (the name defaults to the file name)
 - A `preview.png` for the theme picker
 - Batch mode: a whole folder of wallpapers → a theme for each one
 
-→ [Get PRO](https://franca.gumroad.com/l/theme-from-image-pro)
+→ [Get PRO](https://francadev.gumroad.com/l/theme-from-image-pro)
 
 ## Support
 [Sponsor on GitHub](https://github.com/sponsors/FranElfers) or [buy me a cafecito](https://cafecito.app/francadev) ☕
