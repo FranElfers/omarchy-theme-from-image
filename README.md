@@ -16,7 +16,7 @@ omarchy theme set wallpaper
 
 ## Install
 ```bash
-git clone https://github.com/franelfers/omarchy-theme-from-image
+git clone https://github.com/FranElfers/omarchy-theme-from-image
 install -Dm755 omarchy-theme-from-image/omarchy-theme-from-image ~/.local/bin/omarchy-theme-from-image
 ```
 
@@ -33,10 +33,10 @@ Writes to `~/.config/omarchy/themes/<name>` (the name defaults to the file name)
 - A `preview.png` for the theme picker
 - Batch mode: a whole folder of wallpapers → a theme for each one
 
-→ [Get PRO](GUMROAD_PRO_URL_TODO)
+→ [Get PRO](https://franca.gumroad.com/l/theme-from-image-pro)
 
 ## Support
-[Sponsor on GitHub](https://github.com/sponsors/franelfers) ☕
+[Sponsor on GitHub](https://github.com/sponsors/FranElfers) or [buy me a cafecito](https://cafecito.app/francadev) ☕
 
 ## License
 MIT
