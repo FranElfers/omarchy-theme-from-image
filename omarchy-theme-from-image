@@ -1,0 +1,119 @@
+#!/usr/bin/env python3
+"""Crea un tema Omarchy completo a partir de una imagen (wallpaper).
+
+Uso: omarchy-theme-from-image <imagen> [--name NOMBRE] [--light] [--out DIR]
+Por defecto escribe en ~/.config/omarchy/themes/<nombre>; después: omarchy theme set <nombre>
+Requiere solo Python 3.11+ y ImageMagick (`magick`, viene con Omarchy).
+"""
+import argparse, colorsys, re, shutil, subprocess, sys
+from pathlib import Path
+
+HUES = {"red": 355, "orange": 25, "yellow": 48, "green": 110, "cyan": 180, "blue": 215, "magenta": 300}
+ICONS = [(15, "Yaru-red"), (40, "Yaru-wartybrown"), (65, "Yaru-yellow"), (100, "Yaru-olive"), (150, "Yaru-sage"),
+         (190, "Yaru-prussiangreen"), (250, "Yaru-blue"), (290, "Yaru-purple"), (340, "Yaru-magenta"), (360, "Yaru-red")]
+
+
+def hexs(h, s, l):
+    return "#%02x%02x%02x" % tuple(round(x * 255) for x in colorsys.hls_to_rgb(h / 360 % 1, l, s))
+
+
+def hls(hx):
+    h, l, s = colorsys.rgb_to_hls(*(int(hx[i:i + 2], 16) / 255 for i in (1, 3, 5)))
+    return h * 360, s, l
+
+
+def lum(hx):
+    c = [int(hx[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+    c = [x / 12.92 if x <= 0.03928 else ((x + 0.055) / 1.055) ** 2.4 for x in c]
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+
+
+def ratio(a, b):
+    la, lb = sorted((lum(a), lum(b)), reverse=True)
+    return (la + 0.05) / (lb + 0.05)
+
+
+def legible(h, s, l, bg, minimum, dark):
+    """Mueve la luminosidad lejos del fondo hasta alcanzar el contraste mínimo."""
+    step = 0.01 if dark else -0.01
+    while ratio(hexs(h, s, l), bg) < minimum and 0 <= l + step <= 1:
+        l += step
+    return hexs(h, s, l)
+
+
+def palette(image):
+    """[(cantidad, '#rrggbb')] de los 16 colores dominantes, vía ImageMagick."""
+    out = subprocess.run(["magick", str(image), "-resize", "200x200", "-colors", "16", "-format", "%c", "histogram:info:-"],
+                         capture_output=True, text=True, check=True).stdout
+    return [(int(n), "#" + hx.lower()) for n, hx in re.findall(r"^\s*(\d+):.*?#([0-9A-Fa-f]{6})", out, re.M)]
+
+
+def build(colors, dark):
+    total = sum(n for n, _ in colors)
+    weighted = [(n / total, *hls(hx)) for n, hx in colors]
+    # tono base del fondo: el color más frecuente; accent: el más "vivo" (frecuencia × saturación, sin extremos de luz)
+    base_h, base_s = max(weighted)[1:3]
+    acc_h, acc_s = max(weighted, key=lambda w: w[0] ** 0.5 * w[2] * (0.15 < w[3] < 0.85))[1:3]
+    sat = min(max(sum(w[0] * w[2] for w in weighted), 0.35), 0.7)  # saturación media de la imagen, acotada
+    bs = min(base_s, 0.25)
+
+    L = (lambda d, l: d if dark else l)
+    bg = hexs(base_h, bs, L(0.09, 0.95))
+    c = {"mode": L("dark", "light"), "background": bg,
+         "dark_background": hexs(base_h, bs, L(0.07, 0.91)), "darker_background": hexs(base_h, bs, L(0.05, 0.87)),
+         "lighter_background": hexs(base_h, bs, L(0.13, 0.98)), "selection": hexs(base_h, bs, L(0.2, 0.85)),
+         "muted": legible(base_h, bs * 0.8, L(0.3, 0.7), bg, 2, dark),
+         "foreground": legible(base_h, 0.15, L(0.85, 0.2), bg, 7, dark),
+         "light_foreground": legible(base_h, 0.15, L(0.78, 0.26), bg, 7, dark),
+         "bright_foreground": legible(base_h, 0.15, L(0.93, 0.1), bg, 7, dark),
+         "dark_foreground": legible(base_h, 0.1, L(0.5, 0.5), bg, 3, dark),
+         "accent": legible(acc_h, max(acc_s, 0.45), L(0.65, 0.4), bg, 4.5, dark),
+         "brown": hexs(25, 0.3, L(0.4, 0.4))}
+    for name, target in HUES.items():
+        # tiñe el color ANSI hacia un tono parecido de la imagen (±25°), si lo hay
+        near = [w[1] for w in weighted if abs((w[1] - target + 180) % 360 - 180) < 25 and w[2] > 0.2]
+        h = target + ((near[0] - target + 180) % 360 - 180) / 2 if near else target
+        c[name] = legible(h, sat, L(0.62, 0.4), bg, 4.5, dark)
+        if name != "orange":
+            h2, s2, l2 = hls(c[name])
+            c["bright_" + name] = legible(h2, s2, l2 + L(0.08, -0.08), bg, 4.5, dark)
+    return c
+
+
+def icon_theme(accent):
+    h, s, _ = hls(accent)
+    if s < 0.15:
+        return "Yaru"
+    return next(name for limit, name in ICONS if h < limit)
+
+
+def write(theme_dir, image, c):
+    theme_dir.mkdir(parents=True, exist_ok=True)
+    order = ["mode", "accent", "selection", "muted", "background", "dark_background", "darker_background",
+             "lighter_background", "foreground", "dark_foreground", "light_foreground", "bright_foreground",
+             *HUES, "brown", *("bright_" + n for n in HUES if n != "orange")]
+    (theme_dir / "colors.toml").write_text("".join(f'{k} = "{c[k]}"\n' for k in order))
+    (theme_dir / "icons.theme").write_text(icon_theme(c["accent"]) + "\n")
+    (theme_dir / "backgrounds").mkdir(exist_ok=True)
+    shutil.copy(image, theme_dir / "backgrounds" / ("1-" + Path(image).name))
+
+
+def main(argv=None):
+    p = argparse.ArgumentParser(description="Crea un tema Omarchy a partir de una imagen.")
+    p.add_argument("image", type=Path)
+    p.add_argument("--name", help="nombre del tema (por defecto, el del archivo)")
+    p.add_argument("--light", action="store_true", help="tema claro en lugar de oscuro")
+    p.add_argument("--out", type=Path, help="carpeta destino (por defecto ~/.config/omarchy/themes/<nombre>)")
+    a = p.parse_args(argv)
+    if not a.image.is_file():
+        p.error(f"no existe la imagen: {a.image}")
+    if not shutil.which("magick"):
+        p.error("falta ImageMagick (`magick`): omarchy pkg add imagemagick")
+    name = re.sub(r"[^a-z0-9_.+-]+", "-", (a.name or a.image.stem).lower()).strip("-.") or "generated"
+    out = a.out or Path.home() / ".config/omarchy/themes" / name
+    write(out, a.image, build(palette(a.image), not a.light))
+    print(f"Tema '{name}' creado en {out}\nAplicalo con: omarchy theme set {name}")
+
+
+if __name__ == "__main__":
+    main()
