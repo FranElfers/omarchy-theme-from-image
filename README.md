@@ -7,6 +7,8 @@ omarchy-theme-from-image ~/Pictures/wallpaper.jpg
 omarchy theme set wallpaper
 ```
 
+No install? Try it in your browser: https://theme-from-image.fransozzan.workers.dev (runs locally, your image never leaves your computer).
+
 - Extracts the dominant colors and maps them to all 26 keys of an Omarchy `colors.toml`
 - **Readable by design:** foreground ≥ 7:1 and every terminal color ≥ 4.5:1 contrast (WCAG AA), adjusted automatically
 - Terminal colors stay recognizable (red is still red) but are tinted toward your image
